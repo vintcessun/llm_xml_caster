@@ -1,0 +1,18 @@
+[package]
+name = "llm_xml_caster"
+version = "0.1.0"
+edition = "2024"
+description = "An XML caster for LLM structured output in Rust."
+license = "MIT"
+repository = "https://github.com/vintcessun/llm_xml_caster"
+
+[dependencies]
+const_format = "0.2.35"
+dashmap = "6.1.0"
+lexical-core = "1.0.6"
+paste = "1.0.15"
+quick-xml = { version = "0.39.0", features = ["async-tokio", "serialize"] }
+serde = "1.0.228"
+thiserror = "2.0.18"
+llm_xml_caster_helper = { version = "0.1.0", path = "./helper" }
+genai = "0.5.3"
