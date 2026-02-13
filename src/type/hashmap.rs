@@ -26,7 +26,7 @@ where
     K: DeserializeOwned + Eq + Hash,
     V: DeserializeOwned,
 {
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
+    pub fn custom_hashmap_parser<'de, D>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
     where
         D: Deserializer<'de>,
     {

@@ -25,7 +25,7 @@ where
     K: DeserializeOwned + Ord,
     V: DeserializeOwned,
 {
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
+    pub fn custom_btreemap_parser<'de, D>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
     where
         D: Deserializer<'de>,
     {
