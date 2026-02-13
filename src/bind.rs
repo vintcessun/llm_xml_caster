@@ -1,7 +1,7 @@
 use crate::{Error, LlmPrompt, Result};
 use genai::{
     Client,
-    chat::{ChatMessage, ChatOptions, ChatRequest},
+    chat::{ChatMessage, ChatRequest},
 };
 use quick_xml::de::from_str;
 use serde::de::DeserializeOwned;
