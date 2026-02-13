@@ -17,6 +17,13 @@ use syn::{
 #[proc_macro_attribute]
 pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as Item);
+    let item_name = match &input {
+        Item::Struct(s) => s.ident.to_string(),
+        Item::Enum(e) => e.ident.to_string(),
+        _ => {
+            return quote! { compile_error!("llm_prompt only supports Struct and Enum"); }.into();
+        }
+    };
     let mut extra_functions = Vec::new();
 
     let mut extra_impls = Vec::new();
@@ -29,7 +36,7 @@ pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             if let Fields::Named(fields) = &mut s.fields {
                 for field in &mut fields.named {
-                    let field_quote = process_field(field, &mut field_generators);
+                    let field_quote = process_field(&item_name, field, &mut field_generators);
                     extra_functions.push(field_quote);
                 }
             }
@@ -74,7 +81,7 @@ pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let mut f_parts = Vec::new();
                 if let Fields::Named(fields) = &mut variant.fields {
                     for field in &mut fields.named {
-                        let field_quote = process_field(field, &mut f_parts);
+                        let field_quote = process_field(&item_name, field, &mut f_parts);
                         extra_functions.push(field_quote);
                     }
                 }
@@ -130,6 +137,7 @@ pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn process_field(
+    item_name: &str,
     field: &mut Field,
     generators: &mut Vec<proc_macro2::TokenStream>,
 ) -> proc_macro2::TokenStream {
@@ -154,7 +162,8 @@ fn process_field(
     };
 
     // Auto-generate #[serde(deserialize_with = "...")]
-    if let (code, Some(parser_path)) = get_custom_parser(&field_name, field_type) {
+    let inner_field_name = format!("{}_{}", item_name, field_name);
+    if let (code, Some(parser_path)) = get_custom_parser(&inner_field_name, field_type) {
         let attr: syn::Attribute = if is_option(field_type) {
             parse_quote! { #[serde(deserialize_with = #parser_path, default)] }
         } else {
