@@ -173,12 +173,13 @@ fn process_field(field: &mut Field, generators: &mut Vec<proc_macro2::TokenStrea
 }
 
 fn is_option(ty: &Type) -> bool {
-    if let Type::Path(p) = ty {
-        if let Some(segment) = p.path.segments.last() {
-            let ident = segment.ident.to_string();
-            return ident == "Option";
-        }
+    if let Type::Path(p) = ty
+        && let Some(segment) = p.path.segments.last()
+    {
+        let ident = segment.ident.to_string();
+        return ident == "Option";
     }
+
     false
 }
 

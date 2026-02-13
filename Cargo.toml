@@ -11,7 +11,7 @@ const_format = "0.2.35"
 dashmap = "6.1.0"
 lexical-core = "1.0.6"
 paste = "1.0.15"
-quick-xml = { version = "0.39.0", features = ["async-tokio", "serialize"] }
+quick-xml = { version = "0.39.0", features = ["serialize"] }
 serde = "1.0.228"
 thiserror = "2.0.18"
 llm_xml_caster_helper = { version = "0.1.0", path = "./helper" }
