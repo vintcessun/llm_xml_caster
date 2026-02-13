@@ -6,8 +6,9 @@ where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
+    let clean_s = s.trim().to_lowercase();
 
-    match s.trim().to_lowercase().as_str() {
+    match clean_s.as_str() {
         // the true values bucket
         "true" | "1" | "yes" | "y" | "t" | "on" | "真" | "checked" | "selected" => Ok(true),
         // the false values bucket
@@ -15,14 +16,14 @@ where
         // if the LLM outputs other nonsense, default to error
         _ => Err(serde::de::Error::custom(format!(
             "can not parse '{}' as a boolean value",
-            s
+            clean_s
         ))),
     }
 }
 
 impl LlmPrompt for bool {
     fn get_prompt_schema() -> &'static str {
-        "Boolean value, either `true` or `false`"
+        "it is a boolean value, either `true` or `false`"
     }
 
     fn root_name() -> &'static str {
