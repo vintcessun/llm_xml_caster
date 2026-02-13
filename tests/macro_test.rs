@@ -269,3 +269,41 @@ fn test_complex_struct_deserialization() {
         }
     );
 }
+
+#[llm_prompt]
+#[derive(Deserialize, Debug, PartialEq)]
+struct ThirdStruct {
+    #[prompt("An optional list of strings")]
+    optional_list: Option<Vec<String>>,
+}
+
+#[test]
+fn test_third_struct_deserialization() {
+    let xml_with_list = r#"
+    <ThirdStruct>
+        <optional_list>
+            <item><![CDATA[item1]]></item>
+            <item><![CDATA[item2]]></item>
+        </optional_list>
+    </ThirdStruct>
+    "#;
+    let decoded_with_list: ThirdStruct = from_str(xml_with_list).unwrap();
+    assert_eq!(
+        decoded_with_list,
+        ThirdStruct {
+            optional_list: Some(vec!["item1".to_string(), "item2".to_string()]),
+        }
+    );
+
+    let xml_without_list = r#"
+    <ThirdStruct>
+    </ThirdStruct>
+    "#;
+    let decoded_without_list: ThirdStruct = from_str(xml_without_list).unwrap();
+    assert_eq!(
+        decoded_without_list,
+        ThirdStruct {
+            optional_list: None,
+        }
+    );
+}

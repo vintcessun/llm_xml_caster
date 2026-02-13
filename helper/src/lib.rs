@@ -1,6 +1,6 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{
     Field, Fields, GenericArgument, Item, PathArguments, Type, parse_macro_input, parse_quote,
 };
@@ -17,6 +17,7 @@ use syn::{
 #[proc_macro_attribute]
 pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as Item);
+    let mut extra_functions = Vec::new();
 
     let mut extra_impls = Vec::new();
 
@@ -28,7 +29,8 @@ pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             if let Fields::Named(fields) = &mut s.fields {
                 for field in &mut fields.named {
-                    process_field(field, &mut field_generators);
+                    let field_quote = process_field(field, &mut field_generators);
+                    extra_functions.push(field_quote);
                 }
             }
 
@@ -72,7 +74,8 @@ pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let mut f_parts = Vec::new();
                 if let Fields::Named(fields) = &mut variant.fields {
                     for field in &mut fields.named {
-                        process_field(field, &mut f_parts);
+                        let field_quote = process_field(field, &mut f_parts);
+                        extra_functions.push(field_quote);
                     }
                 }
 
@@ -121,14 +124,19 @@ pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let result = quote! {
         #input
         #(#extra_impls)*
+        #(#extra_functions)*
     };
     result.into()
 }
 
-fn process_field(field: &mut Field, generators: &mut Vec<proc_macro2::TokenStream>) {
+fn process_field(
+    field: &mut Field,
+    generators: &mut Vec<proc_macro2::TokenStream>,
+) -> proc_macro2::TokenStream {
     let field_ident = field.ident.as_ref().expect("Only support named fields");
     let field_name = field_ident.to_string();
     let field_type = &field.ty;
+    let mut extra_functions = Vec::new();
 
     // Extract #[prompt("...")]
     let mut user_description = None;
@@ -146,13 +154,14 @@ fn process_field(field: &mut Field, generators: &mut Vec<proc_macro2::TokenStrea
     };
 
     // Auto-generate #[serde(deserialize_with = "...")]
-    if let Some(parser_path) = get_custom_parser(field_type) {
+    if let (code, Some(parser_path)) = get_custom_parser(&field_name, field_type) {
         let attr: syn::Attribute = if is_option(field_type) {
             parse_quote! { #[serde(deserialize_with = #parser_path, default)] }
         } else {
             parse_quote! { #[serde(deserialize_with = #parser_path)] }
         };
         field.attrs.push(attr);
+        extra_functions.push(code);
     }
 
     generators.push(quote! {
@@ -170,6 +179,10 @@ fn process_field(field: &mut Field, generators: &mut Vec<proc_macro2::TokenStrea
 
     // Remove #[prompt] from the field attributes so it doesn't cause a compile error
     field.attrs.retain(|attr| !attr.path().is_ident("prompt"));
+
+    quote! {
+        #(#extra_functions)*
+    }
 }
 
 fn is_option(ty: &Type) -> bool {
@@ -183,58 +196,212 @@ fn is_option(ty: &Type) -> bool {
     false
 }
 
-fn get_custom_parser(ty: &Type) -> Option<String> {
+fn get_custom_parser(name: &str, ty: &Type) -> (proc_macro2::TokenStream, Option<String>) {
     let tp = if let Type::Path(p) = ty {
         p
     } else {
-        return None;
+        return (quote! {}, None);
     };
-    let segment = tp.path.segments.last()?;
-    let ident = segment.ident.to_string();
+    let segment = if let Some(segment) = tp.path.segments.last() {
+        segment
+    } else {
+        return (quote! {}, None);
+    };
 
-    match ident.as_str() {
-        #[cfg(feature = "ordered_float")]
-        "OrderedFloat" => {
-            if let PathArguments::AngleBracketed(args) = &segment.arguments
-                && let Some(GenericArgument::Type(inner)) = args.args.first()
-            {
-                // Re-parsing inner to get clean string
-                let inner_str = quote!(#inner).to_string().replace(" ", "");
-                return Some(format!(
-                    "::llm_xml_caster::OrderedFloatParser::<{}>::custom_ordered_float_parser",
-                    inner_str
-                ));
-            }
-            None
+    let mut extra_functions = Vec::new();
+    let mut ret_function_name = None;
+
+    match &segment.arguments {
+        PathArguments::None => {
+            ret_function_name = match segment.ident.to_string().as_str() {
+                "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128"
+                | "f32" | "f64" | "bool" => {
+                    Some(format!("::llm_xml_caster::custom_{}_parser", segment.ident))
+                }
+                _ => None,
+            };
         }
-        "Vec" => {
-            if let PathArguments::AngleBracketed(args) = &segment.arguments
-                && let Some(GenericArgument::Type(inner)) = args.args.first()
-            {
-                // Re-parsing inner to get clean string
-                let inner_str = quote!(#inner).to_string().replace(" ", "");
-                return Some(format!(
-                    "::llm_xml_caster::VecParser::<{}>::custom_vector_parser",
-                    inner_str
-                ));
-            }
-            None
-        }
-        "Option" => {
-            if let PathArguments::AngleBracketed(args) = &segment.arguments
-                && let Some(GenericArgument::Type(inner)) = args.args.first()
-            {
-                let inner_str = quote!(#inner).to_string().replace(" ", "");
-                return Some(format!(
-                    "::llm_xml_caster::OptionParser::<{}>::custom_option_parser",
-                    inner_str
-                ));
-            }
-            None
-        }
-        "bool" => Some("::llm_xml_caster::custom_bool_parser".to_string()),
-        "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "f32"
-        | "f64" => Some(format!("::llm_xml_caster::custom_{}_parser", ident)),
-        _ => None,
+        PathArguments::AngleBracketed(path) => match path.args.len() {
+            1 => match segment.ident.to_string().as_str() {
+                #[cfg(feature = "ordered_float")]
+                "OrderedFloat" => {
+                    if let PathArguments::AngleBracketed(args) = &segment.arguments
+                        && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
+                    {
+                        let inner_name = format!("{}_inner", name);
+                        let (inner_tokens, _) = get_custom_parser(&inner_name, inner_ty);
+
+                        let parser_call = quote! { ::llm_xml_caster::OrderedFloatParser::<#inner_ty>::custom_ordered_float_parser };
+
+                        let func_ident = format_ident!("{}", name);
+
+                        let wrapper_function = quote! {
+                            pub fn #func_ident<'de, D>(deserializer: D) -> Result<#ty, D::Error>
+                            where
+                                D: serde::Deserializer<'de>,
+                            {
+                                #parser_call(deserializer)
+                            }
+                        };
+                        extra_functions.push(quote! {
+                            #inner_tokens
+                            #wrapper_function
+                        });
+                        ret_function_name = Some(func_ident.to_string());
+                    }
+                }
+                "Vec" => {
+                    if let PathArguments::AngleBracketed(args) = &segment.arguments
+                        && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
+                    {
+                        let inner_name = format!("{}_inner", name);
+                        let (inner_tokens, _) = get_custom_parser(&inner_name, inner_ty);
+
+                        let parser_call = quote! { ::llm_xml_caster::VecParser::<#inner_ty>::custom_vector_parser };
+
+                        let func_ident = format_ident!("{}", name);
+
+                        let wrapper_function = quote! {
+                            pub fn #func_ident<'de, D>(deserializer: D) -> Result<#ty, D::Error>
+                            where
+                                D: serde::Deserializer<'de>,
+                            {
+                                #parser_call(deserializer)
+                            }
+                        };
+                        extra_functions.push(quote! {
+                            #inner_tokens
+                            #wrapper_function
+                        });
+                        ret_function_name = Some(func_ident.to_string());
+                    }
+                }
+                "Option" => {
+                    if let PathArguments::AngleBracketed(args) = &segment.arguments
+                        && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
+                    {
+                        let inner_name = format!("{}_inner", name);
+                        let (inner_tokens, inner_parser) = get_custom_parser(&inner_name, inner_ty);
+
+                        let func_ident = format_ident!("{}", name);
+
+                        let wrapper_function = if let Some(inner_parser_path) = inner_parser {
+                            quote! {
+                                pub fn #func_ident<'de, D>(deserializer: D) -> Result<#ty, D::Error>
+                                where
+                                    D: serde::Deserializer<'de>,
+                                {
+                                    #[derive(serde::Deserialize)]
+                                    struct OptionWrapper(#[serde(deserialize_with = #inner_parser_path)] #inner_ty);
+
+                                    match OptionWrapper::deserialize(deserializer) {
+                                        Ok(wrapper) => Ok(Some(wrapper.0)),
+                                        Err(_) => Ok(None),
+                                    }
+                                }
+                            }
+                        } else {
+                            quote! {
+                                pub fn #func_ident<'de, D>(deserializer: D) -> Result<#ty, D::Error>
+                                where
+                                    D: serde::Deserializer<'de>,
+                                {
+                                    ::llm_xml_caster::OptionParser::<#inner_ty>::custom_option_parser(deserializer)
+                                }
+                            }
+                        };
+
+                        extra_functions.push(quote! {
+                            #inner_tokens
+                            #wrapper_function
+                        });
+                        ret_function_name = Some(func_ident.to_string());
+                    }
+                }
+                _ => {}
+            },
+            2 => match segment.ident.to_string().as_str() {
+                "BTreeMap" => {
+                    if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                        let mut args_iter = args.args.iter();
+                        if let (
+                            Some(GenericArgument::Type(key_ty)),
+                            Some(GenericArgument::Type(val_ty)),
+                        ) = (args_iter.next(), args_iter.next())
+                        {
+                            let key_name = format!("{}_key", name);
+                            let val_name = format!("{}_val", name);
+
+                            let (key_tokens, _) = get_custom_parser(&key_name, key_ty);
+                            let (val_tokens, _) = get_custom_parser(&val_name, val_ty);
+
+                            let parser_call = quote! { ::llm_xml_caster::BTreeMapParser::<#key_ty, #val_ty>::custom_btreemap_parser };
+
+                            let func_ident = format_ident!("{}", name);
+
+                            let wrapper_function = quote! {
+                                pub fn #func_ident<'de, D>(deserializer: D) -> Result<#ty, D::Error>
+                                where
+                                    D: serde::Deserializer<'de>,
+                                {
+                                    #parser_call(deserializer)
+                                }
+                            };
+                            extra_functions.push(quote! {
+                                #key_tokens
+                                #val_tokens
+                                #wrapper_function
+                            });
+                            ret_function_name = Some(func_ident.to_string());
+                        }
+                    }
+                }
+                "HashMap" => {
+                    if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                        let mut args_iter = args.args.iter();
+                        if let (
+                            Some(GenericArgument::Type(key_ty)),
+                            Some(GenericArgument::Type(val_ty)),
+                        ) = (args_iter.next(), args_iter.next())
+                        {
+                            let key_name = format!("{}_key", name);
+                            let val_name = format!("{}_val", name);
+
+                            let (key_tokens, _) = get_custom_parser(&key_name, key_ty);
+                            let (val_tokens, _) = get_custom_parser(&val_name, val_ty);
+
+                            let parser_call = quote! { ::llm_xml_caster::HashMapParser::<#key_ty, #val_ty>::custom_hashmap_parser };
+
+                            let func_ident = format_ident!("{}", name);
+
+                            let wrapper_function = quote! {
+                                pub fn #func_ident<'de, D>(deserializer: D) -> Result<#ty, D::Error>
+                                where
+                                    D: serde::Deserializer<'de>,
+                                {
+                                    #parser_call(deserializer)
+                                }
+                            };
+                            extra_functions.push(quote! {
+                                #key_tokens
+                                #val_tokens
+                                #wrapper_function
+                            });
+                            ret_function_name = Some(func_ident.to_string());
+                        }
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        },
+        _ => {}
     }
+
+    (
+        quote! {
+            #(#extra_functions)*
+        },
+        ret_function_name,
+    )
 }
