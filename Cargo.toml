@@ -15,4 +15,4 @@ quick-xml = { version = "0.39.0", features = ["async-tokio", "serialize"] }
 serde = "1.0.228"
 thiserror = "2.0.18"
 llm_xml_caster_helper = { version = "0.1.0", path = "./helper" }
-genai = "0.5.3"
+genai = { git = "https://github.com/jeremychone/rust-genai", branch = "main" }
