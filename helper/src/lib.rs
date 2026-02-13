@@ -193,9 +193,20 @@ fn get_custom_parser(ty: &Type) -> Option<String> {
     let ident = segment.ident.to_string();
 
     match ident.as_str() {
-        "bool" => Some("::llm_xml_caster::custom_bool_parser".to_string()),
-        "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "f32"
-        | "f64" => Some(format!("::llm_xml_caster::custom_{}_parser", ident)),
+        #[cfg(feature = "ordered_float")]
+        "OrderedFloat" => {
+            if let PathArguments::AngleBracketed(args) = &segment.arguments
+                && let Some(GenericArgument::Type(inner)) = args.args.first()
+            {
+                // Re-parsing inner to get clean string
+                let inner_str = quote!(#inner).to_string().replace(" ", "");
+                return Some(format!(
+                    "::llm_xml_caster::OrderedFloatParser::<{}>::custom_ordered_float_parser",
+                    inner_str
+                ));
+            }
+            None
+        }
         "Vec" => {
             if let PathArguments::AngleBracketed(args) = &segment.arguments
                 && let Some(GenericArgument::Type(inner)) = args.args.first()
@@ -221,6 +232,9 @@ fn get_custom_parser(ty: &Type) -> Option<String> {
             }
             None
         }
+        "bool" => Some("::llm_xml_caster::custom_bool_parser".to_string()),
+        "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "f32"
+        | "f64" => Some(format!("::llm_xml_caster::custom_{}_parser", ident)),
         _ => None,
     }
 }

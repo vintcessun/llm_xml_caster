@@ -195,3 +195,28 @@ fn test_collections_deserialization() {
         }
     );
 }
+
+#[test]
+fn test_ordered_float_deserialization() {
+    use ordered_float::OrderedFloat;
+
+    #[llm_prompt]
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct OrderedFloatStruct {
+        #[prompt("An ordered float value")]
+        value: OrderedFloat<f64>,
+    }
+
+    let xml = r#"
+    <OrderedFloatStruct>
+        <value>114.514</value>
+    </OrderedFloatStruct>
+    "#;
+    let decoded: OrderedFloatStruct = from_str(xml).unwrap();
+    assert_eq!(
+        decoded,
+        OrderedFloatStruct {
+            value: OrderedFloat(114.514),
+        }
+    );
+}

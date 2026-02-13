@@ -16,3 +16,8 @@ serde = "1.0.228"
 thiserror = "2.0.18"
 llm_xml_caster_helper = { version = "0.1.0", path = "./helper" }
 genai = { git = "https://github.com/jeremychone/rust-genai", branch = "main" }
+ordered-float = { version = "5.1.0", features = ["serde"], optional = true }
+
+[features]
+ordered_float = ["dep:ordered-float", "llm_xml_caster_helper/ordered_float"]
+third = ["ordered_float"]

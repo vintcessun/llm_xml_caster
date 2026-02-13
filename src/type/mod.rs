@@ -15,6 +15,9 @@ mod btreemap;
 pub use btreemap::*;
 mod hashmap;
 pub use hashmap::*;
+mod third;
+#[cfg(feature = "third")]
+pub use third::*;
 
 mod r#macro;
 
