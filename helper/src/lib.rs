@@ -1,4 +1,6 @@
 extern crate proc_macro;
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
@@ -220,6 +222,11 @@ fn get_custom_parser(name: &str, ty: &Type) -> (proc_macro2::TokenStream, Option
     let mut extra_functions = Vec::new();
     let mut ret_function_name = None;
 
+    let type_str = quote! { #ty }.to_string();
+    let mut hasher = DefaultHasher::new();
+    type_str.hash(&mut hasher);
+    let type_hash = hasher.finish();
+
     match &segment.arguments {
         PathArguments::None => {
             ret_function_name = match segment.ident.to_string().as_str() {
@@ -237,7 +244,7 @@ fn get_custom_parser(name: &str, ty: &Type) -> (proc_macro2::TokenStream, Option
                     if let PathArguments::AngleBracketed(args) = &segment.arguments
                         && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
                     {
-                        let inner_name = format!("{}_inner", name);
+                        let inner_name = format!("_{}_{}_inner", type_hash, name);
                         let (inner_tokens, _) = get_custom_parser(&inner_name, inner_ty);
 
                         let parser_call = quote! { ::llm_xml_caster::OrderedFloatParser::<#inner_ty>::custom_ordered_float_parser };
@@ -263,7 +270,7 @@ fn get_custom_parser(name: &str, ty: &Type) -> (proc_macro2::TokenStream, Option
                     if let PathArguments::AngleBracketed(args) = &segment.arguments
                         && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
                     {
-                        let inner_name = format!("{}_inner", name);
+                        let inner_name = format!("_{}_{}_inner", type_hash, name);
                         let (inner_tokens, _) = get_custom_parser(&inner_name, inner_ty);
 
                         let parser_call = quote! { ::llm_xml_caster::VecParser::<#inner_ty>::custom_vector_parser };
@@ -289,7 +296,7 @@ fn get_custom_parser(name: &str, ty: &Type) -> (proc_macro2::TokenStream, Option
                     if let PathArguments::AngleBracketed(args) = &segment.arguments
                         && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
                     {
-                        let inner_name = format!("{}_inner", name);
+                        let inner_name = format!("_{}_{}_inner", type_hash, name);
                         let (inner_tokens, inner_parser) = get_custom_parser(&inner_name, inner_ty);
 
                         let func_ident = format_ident!("{}", name);
@@ -338,8 +345,8 @@ fn get_custom_parser(name: &str, ty: &Type) -> (proc_macro2::TokenStream, Option
                             Some(GenericArgument::Type(val_ty)),
                         ) = (args_iter.next(), args_iter.next())
                         {
-                            let key_name = format!("{}_key", name);
-                            let val_name = format!("{}_val", name);
+                            let key_name = format!("_{}_{}_key", type_hash, name);
+                            let val_name = format!("_{}_{}_val", type_hash, name);
 
                             let (key_tokens, _) = get_custom_parser(&key_name, key_ty);
                             let (val_tokens, _) = get_custom_parser(&val_name, val_ty);
@@ -373,8 +380,8 @@ fn get_custom_parser(name: &str, ty: &Type) -> (proc_macro2::TokenStream, Option
                             Some(GenericArgument::Type(val_ty)),
                         ) = (args_iter.next(), args_iter.next())
                         {
-                            let key_name = format!("{}_key", name);
-                            let val_name = format!("{}_val", name);
+                            let key_name = format!("_{}_{}_key", type_hash, name);
+                            let val_name = format!("_{}_{}_val", type_hash, name);
 
                             let (key_tokens, _) = get_custom_parser(&key_name, key_ty);
                             let (val_tokens, _) = get_custom_parser(&val_name, val_ty);
