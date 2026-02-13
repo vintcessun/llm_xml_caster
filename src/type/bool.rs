@@ -24,7 +24,10 @@ impl LlmPrompt for bool {
     fn get_prompt_schema() -> &'static str {
         "Boolean value, either `true` or `false`"
     }
+
     fn root_name() -> &'static str {
         "bool"
     }
+
+    const IS_ENUM: bool = false;
 }

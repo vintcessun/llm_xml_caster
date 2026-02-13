@@ -28,7 +28,10 @@ impl<T: LlmPrompt + 'static> LlmPrompt for OrderedFloat<T> {
     fn get_prompt_schema() -> &'static str {
         T::get_prompt_schema()
     }
+
     fn root_name() -> &'static str {
         T::root_name()
     }
+
+    const IS_ENUM: bool = false;
 }

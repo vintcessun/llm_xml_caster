@@ -24,6 +24,8 @@ pub trait LlmPrompt {
     fn get_prompt_schema() -> &'static str;
     /// Returns the root XML element name expected by the deserializer.
     fn root_name() -> &'static str;
+    /// Indicates whether the type is an enum.
+    const IS_ENUM: bool;
 }
 
 pub use bind::{generate_as, generate_as_with_retries};

@@ -18,4 +18,6 @@ impl LlmPrompt for String {
     fn root_name() -> &'static str {
         "string"
     }
+
+    const IS_ENUM: bool = false;
 }

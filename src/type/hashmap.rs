@@ -75,4 +75,6 @@ where
             .root_name
             .get_or_init(|| format!("HashMap<{}, {}>", key_name, val_name))
     }
+
+    const IS_ENUM: bool = false;
 }

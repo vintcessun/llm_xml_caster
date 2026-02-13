@@ -43,6 +43,7 @@ impl<T: LlmPrompt + 'static> LlmPrompt for Vec<T> {
             format!("A series(0 or more elements) of items where each item has the following format:<item>{}</item>\nNOTICE: Even a single item must be enclosed within <item></item> tags.", sub_schema)
         })
     }
+
     fn root_name() -> &'static str {
         let sub_root_name = T::root_name();
         let cache = Cache::<Vec<T>>::get();
@@ -50,4 +51,6 @@ impl<T: LlmPrompt + 'static> LlmPrompt for Vec<T> {
             .root_name
             .get_or_init(|| format!("Vec<{}>", sub_root_name))
     }
+
+    const IS_ENUM: bool = false;
 }

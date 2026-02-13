@@ -351,6 +351,7 @@ impl LlmPrompt for PythonValueWeak {
     fn root_name() -> &'static str {
         "PythonValue"
     }
+    const IS_ENUM: bool = true;
 }
 
 #[llm_prompt]
@@ -397,6 +398,7 @@ fn test_python_value_schema() {
     assert!(schema.contains("<PythonValue>"));
     assert!(schema.contains("the type of the value is showed"));
     assert_eq!(PythonValue::root_name(), "");
+    assert!(PythonValue::IS_ENUM);
 }
 
 #[test]
@@ -582,6 +584,91 @@ fn test_string_trim_deserialization() {
         decoded,
         StringTrimTest {
             val: "This string has leading and trailing whitespace.".to_string(),
+        }
+    );
+}
+
+#[llm_prompt]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct PythonParam {
+    #[prompt("参数的名字，应该和代码中最后调用函数的参数名一致")]
+    pub name: String,
+    #[prompt("参数的值，应该是一个字符串，如果需要传入复杂数据结构请在代码中解析这个字符串")]
+    pub value: PythonValue,
+}
+
+#[test]
+fn test_python_param_deserialization() {
+    let xml = r#"<PythonParam>
+        <name><![CDATA[param1]]></name>
+        <value>
+            <String><val><![CDATA[value1]]></val></String>
+        </value>
+    </PythonParam>"#;
+    let decoded: PythonParam = from_str(xml).unwrap();
+    assert_eq!(
+        decoded,
+        PythonParam {
+            name: "param1".to_string(),
+            value: PythonValue::String {
+                val: "value1".to_string()
+            },
+        }
+    );
+}
+
+#[llm_prompt]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct PythonExecRequest {
+    #[prompt("要执行脚本的名字以.py结尾")]
+    pub script_name: String,
+    #[prompt("要传入的参数列表")]
+    pub params: Vec<PythonParam>,
+    #[prompt(r#"要执行的 python 代码"#)]
+    pub code: String,
+}
+
+#[test]
+fn test_python_exec_request_deserialization() {
+    let xml = r#"<PythonExecRequest>
+  <script_name><![CDATA[
+  fibonacci.py
+  ]]></script_name>
+  <params>
+    <item>
+      <PythonParam>
+        <name>n</name>
+        <value>
+          <Int>
+            <val>10</val>
+          </Int>
+        </value>
+      </PythonParam>
+    </item>
+  </params>
+  <code><![CDATA[
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+fib(n)]]>
+</code>
+</PythonExecRequest>"#;
+    let decoded: PythonExecRequest = from_str(xml).unwrap();
+    assert_eq!(
+        decoded,
+        PythonExecRequest {
+            script_name: "fibonacci.py".to_string(),
+            params: vec![PythonParam {
+                name: "n".to_string(),
+                value: PythonValue::Int { val: 10 },
+            }],
+            code: r#"def fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+fib(n)"#
+                .to_string(),
         }
     );
 }

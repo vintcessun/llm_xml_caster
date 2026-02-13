@@ -32,6 +32,7 @@ impl<T: LlmPrompt + 'static> LlmPrompt for Option<T> {
             format!("Optional. if not provided, do not include any tags. If provided, the format is: {}", sub_schema)
         })
     }
+
     fn root_name() -> &'static str {
         let sub_root_name = T::root_name();
         let cache = Cache::<Option<T>>::get();
@@ -39,4 +40,6 @@ impl<T: LlmPrompt + 'static> LlmPrompt for Option<T> {
             .root_name
             .get_or_init(|| format!("Option<{}>", sub_root_name))
     }
+
+    const IS_ENUM: bool = false;
 }

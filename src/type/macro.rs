@@ -52,9 +52,12 @@ macro_rules! impl_llm_numeric_parser {
                 fn get_prompt_schema() -> &'static str {
                     $prompt
                 }
+
                 fn root_name() -> &'static str {
                     stringify!($ty)
                 }
+
+                const IS_ENUM: bool = false;
             }
         }
     };

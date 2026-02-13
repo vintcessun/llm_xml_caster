@@ -56,6 +56,7 @@ pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         })
                     }
                     fn root_name() -> &'static str { #root_tag }
+                    const IS_ENUM: bool = false;
                 }
             });
         }
@@ -125,6 +126,7 @@ pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         })
                     }
                     fn root_name() -> &'static str { "" }
+                    const IS_ENUM: bool = true;
                 }
             });
         }
@@ -419,6 +421,20 @@ fn get_custom_parser(name: &str, ty: &Type) -> (proc_macro2::TokenStream, Option
             _ => {}
         },
         _ => {}
+    }
+
+    if ret_function_name.is_none() {
+        let func_ident = format_ident!("{}", name);
+        let wrapper_function = quote! {
+            pub fn #func_ident<'de, D>(deserializer: D) -> Result<#ty, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                ::llm_xml_caster::EnumParser::<#ty>::custom_enum_parser(deserializer)
+            }
+        };
+        extra_functions.push(wrapper_function);
+        ret_function_name = Some(func_ident.to_string());
     }
 
     (

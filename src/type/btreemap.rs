@@ -74,4 +74,6 @@ where
             .root_name
             .get_or_init(|| format!("BTreeMap<{}, {}>", key_name, val_name))
     }
+
+    const IS_ENUM: bool = false;
 }
