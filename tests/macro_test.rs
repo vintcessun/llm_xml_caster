@@ -558,3 +558,30 @@ fn test_hashmap_deserialization() {
     expected_map.insert("key2".to_string(), 200);
     assert_eq!(decoded, HashMapTest::HashMapVariant { val: expected_map });
 }
+
+#[llm_prompt]
+#[derive(Deserialize, Debug, PartialEq)]
+struct StringTrimTest {
+    #[prompt("A variant with string that needs trimming")]
+    val: String,
+}
+
+#[test]
+fn test_string_trim_deserialization() {
+    let xml = r#"
+    <StringTrimTest>
+        <val>
+            <![CDATA[
+                This string has leading and trailing whitespace.      
+            ]]>
+        </val>
+    </StringTrimTest>
+    "#;
+    let decoded: StringTrimTest = from_str(xml).unwrap();
+    assert_eq!(
+        decoded,
+        StringTrimTest {
+            val: "This string has leading and trailing whitespace.".to_string(),
+        }
+    );
+}

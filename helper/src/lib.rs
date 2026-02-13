@@ -240,6 +240,7 @@ fn get_custom_parser(name: &str, ty: &Type) -> (proc_macro2::TokenStream, Option
                 | "f32" | "f64" | "bool" => {
                     Some(format!("::llm_xml_caster::custom_{}_parser", segment.ident))
                 }
+                "String" => Some(format!("::llm_xml_caster::custom_string_parser")),
                 _ => None,
             };
         }

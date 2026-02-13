@@ -1,4 +1,14 @@
 use crate::LlmPrompt;
+use serde::{Deserialize, Deserializer};
+
+pub fn custom_string_parser<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+
+    Ok(s.trim().to_string())
+}
 
 impl LlmPrompt for String {
     fn get_prompt_schema() -> &'static str {
