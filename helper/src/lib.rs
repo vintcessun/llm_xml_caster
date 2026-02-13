@@ -4,7 +4,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    Field, Fields, GenericArgument, Item, PathArguments, Type, parse_macro_input, parse_quote,
+    Expr, Field, Fields, GenericArgument, Item, Lit, Meta, PathArguments, Type, parse::Parser,
+    parse_macro_input, parse_quote,
 };
 
 /// The main procedural macro for `llm_xml_caster`.
@@ -17,11 +18,27 @@ use syn::{
 /// Use `#[prompt("Description")]` on struct fields or enum variants to provide guidance
 /// for the Large Language Model.
 #[proc_macro_attribute]
-pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn llm_prompt(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut weak = false;
+    let attr_parser = syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated;
+    if let Ok(metas) = attr_parser.parse(attr) {
+        for meta in metas {
+            if let Meta::NameValue(nv) = meta {
+                if nv.path.is_ident("weak") {
+                    if let Expr::Lit(el) = &nv.value {
+                        if let Lit::Bool(b) = &el.lit {
+                            weak = b.value;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let mut input = parse_macro_input!(item as Item);
-    let item_name = match &input {
-        Item::Struct(s) => s.ident.to_string(),
-        Item::Enum(e) => e.ident.to_string(),
+    let (item_ident, item_name) = match &input {
+        Item::Struct(s) => (s.ident.clone(), s.ident.to_string()),
+        Item::Enum(e) => (e.ident.clone(), e.ident.to_string()),
         _ => {
             return quote! { compile_error!("llm_prompt only supports Struct and Enum"); }.into();
         }
@@ -133,10 +150,52 @@ pub fn llm_prompt(_attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => return quote! { compile_error!("llm_prompt only supports Struct and Enum"); }.into(),
     }
 
+    let mut weak_shadow = quote! {};
+    if weak {
+        let weak_name = format_ident!("{}Weak", item_ident);
+        let item_name_str = item_ident.to_string();
+        let prompt_schema = format!(
+            "<{}>Referencing the types above.</{}>",
+            item_name_str, item_name_str
+        );
+
+        let derives = match &input {
+            Item::Struct(s) => {
+                let d = s.attrs.iter().find(|a| a.path().is_ident("derive"));
+                quote! { #d }
+            }
+            Item::Enum(e) => {
+                let d = e.attrs.iter().find(|a| a.path().is_ident("derive"));
+                quote! { #d }
+            }
+            _ => {
+                return quote! { compile_error!("llm_prompt only supports Struct and Enum"); }
+                    .into();
+            }
+        };
+
+        weak_shadow = quote! {
+            #derives
+            #[serde(transparent)]
+            pub struct #weak_name(#item_ident);
+
+            impl ::llm_xml_caster::LlmPrompt for #weak_name {
+                fn get_prompt_schema() -> &'static str {
+                    #prompt_schema
+                }
+                fn root_name() -> &'static str {
+                    <#item_ident as ::llm_xml_caster::LlmPrompt>::root_name()
+                }
+                const IS_ENUM: bool = <#item_ident as ::llm_xml_caster::LlmPrompt>::IS_ENUM;
+            }
+        };
+    }
+
     let result = quote! {
         #input
         #(#extra_impls)*
         #(#extra_functions)*
+        #weak_shadow
     };
     result.into()
 }

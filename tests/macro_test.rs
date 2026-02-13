@@ -340,21 +340,7 @@ fn test_third_struct_deserialization() {
     );
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Hash, Ord, PartialOrd)]
-#[serde(transparent)]
-pub struct PythonValueWeak(PythonValue);
-
-impl LlmPrompt for PythonValueWeak {
-    fn get_prompt_schema() -> &'static str {
-        "<PythonValue>the type of the value is showed</PythonValue>"
-    }
-    fn root_name() -> &'static str {
-        "PythonValue"
-    }
-    const IS_ENUM: bool = true;
-}
-
-#[llm_prompt]
+#[llm_prompt(weak = true)]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum PythonValue {
     #[prompt("python's None value")]
@@ -396,9 +382,8 @@ fn test_python_value_schema() {
     let schema = PythonValue::get_prompt_schema();
     println!("Schema :\n{}", schema);
     assert!(schema.contains("<PythonValue>"));
-    assert!(schema.contains("the type of the value is showed"));
+    assert!(schema.contains("Referencing the types above."));
     assert_eq!(PythonValue::root_name(), "");
-    assert!(PythonValue::IS_ENUM);
 }
 
 #[test]
