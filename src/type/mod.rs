@@ -16,7 +16,7 @@ pub use btreemap::*;
 mod hashmap;
 pub use hashmap::*;
 mod third;
-#[cfg(feature = "third")]
+#[cfg(any(feature = "third", feature = "ordered_float"))]
 pub use third::*;
 
 mod r#macro;
