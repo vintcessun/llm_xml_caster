@@ -54,14 +54,11 @@ pub async fn generate_as_with_retries<T: DeserializeOwned + LlmPrompt>(
     let mut chat_req = chat_req.append_message(
         ChatMessage::system(format!("You must respond with a valid XML document(root name is {}) that adheres to the following schema: {}", T::root_name(), T::get_prompt_schema()))
     );
-    let options = ChatOptions::default().with_temperature(0.1);
 
     let mut errs = Vec::new();
 
     for _attempt in 1..=retries {
-        let res = client
-            .exec_chat(model_name, chat_req.clone(), Some(&options))
-            .await?;
+        let res = client.exec_chat(model_name, chat_req.clone(), None).await?;
         if let Some(text) = res.first_text() {
             let root_name = T::root_name();
             let start_tag = format!("<{}>", root_name);
