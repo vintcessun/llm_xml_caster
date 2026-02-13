@@ -1,4 +1,5 @@
 use llm_xml_caster::{LlmPrompt, llm_prompt};
+use ordered_float::OrderedFloat;
 use quick_xml::de::from_str;
 use serde::Deserialize;
 
@@ -198,8 +199,6 @@ fn test_collections_deserialization() {
 
 #[test]
 fn test_ordered_float_deserialization() {
-    use ordered_float::OrderedFloat;
-
     #[llm_prompt]
     #[derive(Deserialize, Debug, PartialEq)]
     struct OrderedFloatStruct {
@@ -217,6 +216,56 @@ fn test_ordered_float_deserialization() {
         decoded,
         OrderedFloatStruct {
             value: OrderedFloat(114.514),
+        }
+    );
+}
+
+#[llm_prompt]
+#[derive(Deserialize, Debug, PartialEq)]
+struct ComplexStruct {
+    #[prompt("A nested struct")]
+    nested: NestedStruct,
+    #[prompt("A list of enums")]
+    enum_list: Vec<TestEnum>,
+    #[prompt("An optional ordered float value")]
+    optional_float: Option<OrderedFloat<f32>>,
+}
+
+#[test]
+fn test_complex_struct_deserialization() {
+    let xml = r#"
+    <ComplexStruct>
+        <nested>
+            <person>
+                <name><![CDATA[Alice]]></name>
+                <age>28</age>
+                <is_student>false</is_student>
+            </person>
+            <score>92.0</score>
+            <state>true</state>
+        </nested>
+        <enum_list>
+            <item><Simple/></item>
+            <item><WithData><value>456</value></WithData></item>
+        </enum_list>
+        <optional_float>19.19</optional_float>
+    </ComplexStruct>
+    "#;
+    let decoded: ComplexStruct = from_str(xml).unwrap();
+    assert_eq!(
+        decoded,
+        ComplexStruct {
+            nested: NestedStruct {
+                person: SimpleStruct {
+                    name: "Alice".to_string(),
+                    age: 28,
+                    is_student: false,
+                },
+                score: 92.0,
+                state: true,
+            },
+            enum_list: vec![TestEnum::Simple, TestEnum::WithData { value: 456 }],
+            optional_float: Some(OrderedFloat(19.19)),
         }
     );
 }
