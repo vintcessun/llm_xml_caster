@@ -2,6 +2,7 @@ use llm_xml_caster::{LlmPrompt, llm_prompt};
 use ordered_float::OrderedFloat;
 use quick_xml::de::from_str;
 use serde::Deserialize;
+use std::collections::{BTreeMap, HashMap};
 
 #[llm_prompt]
 #[derive(Deserialize, Debug, PartialEq)]
@@ -107,10 +108,20 @@ fn test_nested_struct_deserialization() {
 enum TestEnum {
     #[prompt("A simple variant")]
     Simple,
-    #[prompt("A variant with data")]
-    WithData {
+    #[prompt("A variant with data string")]
+    WithStringData {
         #[prompt("The value of the variant")]
-        value: i32,
+        value: String,
+    },
+    #[prompt("A variant with data float")]
+    WithFloatData {
+        #[prompt("The float value of the variant")]
+        value: f64,
+    },
+    #[prompt("A variant with data int")]
+    WithIntData {
+        #[prompt("The int value of the variant")]
+        value: i64,
     },
 }
 
@@ -122,11 +133,15 @@ fn test_enum_schema() {
     );
     assert!(schema.contains("<Simple/>"));
     assert!(schema.contains("A simple variant"));
-    assert!(schema.contains("<WithData>"));
+    assert!(schema.contains("<WithStringData>"));
     assert!(schema.contains("<value>"));
-    assert!(schema.contains("A variant with data"));
+    assert!(schema.contains("A variant with data string"));
     assert!(schema.contains("The value of the variant"));
-    assert_eq!(TestEnum::root_name(), "XML_ENUM_ROOT");
+    assert!(schema.contains("<WithFloatData>"));
+    assert!(schema.contains("A variant with data float"));
+    assert!(schema.contains("<WithIntData>"));
+    assert!(schema.contains("A variant with data int"));
+    assert_eq!(TestEnum::root_name(), "");
 }
 
 #[test]
@@ -135,9 +150,26 @@ fn test_enum_deserialization() {
     let decoded_simple: TestEnum = from_str(xml_simple).unwrap();
     assert_eq!(decoded_simple, TestEnum::Simple);
 
-    let xml_data = r#"<WithData><value>123</value></WithData>"#;
-    let decoded_data: TestEnum = from_str(xml_data).unwrap();
-    assert_eq!(decoded_data, TestEnum::WithData { value: 123 });
+    let xml_data_string = r#"<WithStringData>
+    <value>aaa</value>
+    </WithStringData>"#;
+    let decoded_data: TestEnum = from_str(xml_data_string).unwrap();
+    assert_eq!(
+        decoded_data,
+        TestEnum::WithStringData {
+            value: "aaa".to_string()
+        }
+    );
+    let xml_data_float = r#"<WithFloatData>
+    <value>2.33</value>
+    </WithFloatData>"#;
+    let decoded_data_float: TestEnum = from_str(xml_data_float).unwrap();
+    assert_eq!(decoded_data_float, TestEnum::WithFloatData { value: 2.33 });
+    let xml_data_int = r#"<WithIntData>
+    <value>114514</value>
+    </WithIntData>"#;
+    let decoded_data_int: TestEnum = from_str(xml_data_int).unwrap();
+    assert_eq!(decoded_data_int, TestEnum::WithIntData { value: 114514 });
 }
 
 #[llm_prompt]
@@ -246,7 +278,7 @@ fn test_complex_struct_deserialization() {
         </nested>
         <enum_list>
             <item><Simple/></item>
-            <item><WithData><value>456</value></WithData></item>
+            <item><WithIntData><value>456</value></WithIntData></item>
         </enum_list>
         <optional_float>19.19</optional_float>
     </ComplexStruct>
@@ -264,7 +296,7 @@ fn test_complex_struct_deserialization() {
                 score: 92.0,
                 state: true,
             },
-            enum_list: vec![TestEnum::Simple, TestEnum::WithData { value: 456 }],
+            enum_list: vec![TestEnum::Simple, TestEnum::WithIntData { value: 456 }],
             optional_float: Some(OrderedFloat(19.19)),
         }
     );
@@ -306,4 +338,223 @@ fn test_third_struct_deserialization() {
             optional_list: None,
         }
     );
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[serde(transparent)]
+pub struct PythonValueWeak(PythonValue);
+
+impl LlmPrompt for PythonValueWeak {
+    fn get_prompt_schema() -> &'static str {
+        "<PythonValue>the type of the value is showed</PythonValue>"
+    }
+    fn root_name() -> &'static str {
+        "PythonValue"
+    }
+}
+
+#[llm_prompt]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum PythonValue {
+    #[prompt("python's None value")]
+    None,
+    #[prompt("python's str value")]
+    String {
+        #[prompt("the value of the string")]
+        val: String,
+    },
+    #[prompt("python's int value")]
+    Int {
+        #[prompt("the value of the int")]
+        val: i64,
+    },
+    #[prompt("python's float value")]
+    Float {
+        #[prompt("the value of the float")]
+        val: OrderedFloat<f64>,
+    },
+    #[prompt("python's bool value")]
+    Bool {
+        #[prompt("the value of the bool")]
+        val: bool,
+    },
+    #[prompt("python's list value")]
+    List {
+        #[prompt("the value of the list")]
+        val: Vec<PythonValueWeak>,
+    },
+    #[prompt("python's dict value")]
+    Dict {
+        #[prompt("the value of the dict")]
+        val: BTreeMap<PythonValueWeak, PythonValueWeak>,
+    },
+}
+
+#[test]
+fn test_python_value_schema() {
+    let schema = PythonValue::get_prompt_schema();
+    println!("Schema :\n{}", schema);
+    assert!(schema.contains("<PythonValue>"));
+    assert!(schema.contains("the type of the value is showed"));
+    assert_eq!(PythonValue::root_name(), "");
+}
+
+#[test]
+fn test_python_value_deserialization() {
+    let xml_string = r#"<String><val><![CDATA[test]]></val></String>"#;
+    let decoded_string: PythonValue = from_str(xml_string).unwrap();
+    assert_eq!(
+        decoded_string,
+        PythonValue::String {
+            val: "test".to_string()
+        }
+    );
+    let xml_int = r#"<Int><val>42</val></Int>"#;
+    let decoded_int: PythonValue = from_str(xml_int).unwrap();
+    assert_eq!(decoded_int, PythonValue::Int { val: 42 });
+
+    let xml_float = r#"<Float><val>1.14</val></Float>"#;
+    let decoded_float: PythonValue = from_str(xml_float).unwrap();
+    assert_eq!(
+        decoded_float,
+        PythonValue::Float {
+            val: OrderedFloat(1.14)
+        }
+    );
+    let xml_bool = r#"<Bool><val>true</val></Bool>"#;
+    let decoded_bool: PythonValue = from_str(xml_bool).unwrap();
+    assert_eq!(decoded_bool, PythonValue::Bool { val: true });
+
+    let xml_list = r#"<List>
+    <val>
+        <item><Float><val>1.14</val></Float></item>
+        <item><Bool><val>true</val></Bool></item>
+    </val>
+</List>"#;
+    let decoded_list: PythonValue = from_str(xml_list).unwrap();
+    assert_eq!(
+        decoded_list,
+        PythonValue::List {
+            val: vec![
+                PythonValueWeak(PythonValue::Float {
+                    val: OrderedFloat(1.14)
+                }),
+                PythonValueWeak(PythonValue::Bool { val: true }),
+            ]
+        }
+    );
+
+    let xml_map = r#"
+    <Dict>
+        <val>
+            <entry>
+                <key><String><val><![CDATA[key1]]></val></String></key>
+                <value><Int><val>100</val></Int></value>
+            </entry>
+        </val>
+    </Dict>
+    "#;
+    let decoded_map: PythonValue = from_str(xml_map).unwrap();
+    assert_eq!(
+        decoded_map,
+        PythonValue::Dict {
+            val: {
+                let mut map = BTreeMap::new();
+                map.insert(
+                    PythonValueWeak(PythonValue::String {
+                        val: "key1".to_string(),
+                    }),
+                    PythonValueWeak(PythonValue::Int { val: 100 }),
+                );
+                map
+            },
+        }
+    );
+
+    let xml_full = r#"
+    <Dict>
+        <val>
+            <entry>
+                <key><String><val><![CDATA[key1]]></val></String></key>
+                <value><Int><val>100</val></Int></value>
+            </entry>
+            <entry>
+                <key><String><val><![CDATA[key2]]></val></String></key>
+                <value><List>
+                    <val>
+                        <item>
+                            <Float><val>1.14</val></Float>
+                        </item>
+                        <item>
+                            <Bool><val>true</val></Bool>
+                        </item>
+                    </val>
+                </List></value>
+            </entry>
+        </val>
+    </Dict>
+    "#;
+
+    let decoded: PythonValue = from_str(xml_full).unwrap();
+    assert_eq!(
+        decoded,
+        PythonValue::Dict {
+            val: {
+                let mut map = BTreeMap::new();
+                map.insert(
+                    PythonValueWeak(PythonValue::String {
+                        val: "key1".to_string(),
+                    }),
+                    PythonValueWeak(PythonValue::Int { val: 100 }),
+                );
+                map.insert(
+                    PythonValueWeak(PythonValue::String {
+                        val: "key2".to_string(),
+                    }),
+                    PythonValueWeak(PythonValue::List {
+                        val: vec![
+                            PythonValueWeak(PythonValue::Float {
+                                val: OrderedFloat(1.14),
+                            }),
+                            PythonValueWeak(PythonValue::Bool { val: true }),
+                        ],
+                    }),
+                );
+                map
+            },
+        }
+    );
+}
+
+#[llm_prompt]
+#[derive(Deserialize, Debug, PartialEq)]
+enum HashMapTest {
+    #[prompt("A hashmap variant")]
+    HashMapVariant {
+        #[prompt("The hashmap value")]
+        val: HashMap<String, i32>,
+    },
+}
+
+#[test]
+fn test_hashmap_deserialization() {
+    let xml = r#"
+    <HashMapVariant>
+        <val>
+            <entry>
+                <key><![CDATA[key1]]></key>
+                <value>100</value>
+            </entry>
+            <entry>
+                <key><![CDATA[key2]]></key>
+                <value>200</value>
+            </entry>
+        </val>
+    </HashMapVariant>
+    "#;
+    let decoded: HashMapTest = from_str(xml).unwrap();
+    let mut expected_map = HashMap::new();
+    expected_map.insert("key1".to_string(), 100);
+    expected_map.insert("key2".to_string(), 200);
+    assert_eq!(decoded, HashMapTest::HashMapVariant { val: expected_map });
 }

@@ -4,9 +4,15 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
 #[derive(Deserialize)]
+struct EntryWrapper<T> {
+    #[serde(rename = "$value")]
+    val: T,
+}
+
+#[derive(Deserialize)]
 struct Entry<K, V> {
-    key: K,
-    value: V,
+    key: EntryWrapper<K>,
+    value: EntryWrapper<V>,
 }
 
 #[derive(Deserialize)]
@@ -34,7 +40,7 @@ where
                 let map = wrapper
                     .entries
                     .into_iter()
-                    .map(|e| (e.key, e.value))
+                    .map(|e| (e.key.val, e.value.val))
                     .collect();
                 Ok(map)
             }
